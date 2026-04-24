@@ -90,8 +90,8 @@ def listar_productos():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT TOP 20 id, nombre, precio, imagen_url
-            FROM productos
+            SELECT TOP 20 Id, Nombre, Precio, Stock, Imagen
+            FROM Productos
             ORDER BY id DESC
         """)
         rows = cursor.fetchall()
