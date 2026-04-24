@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: api-productos-azure
+    env: python
+    buildCommand: |
+      apt-get update && apt-get install -y unixodbc unixodbc-dev
+      pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
