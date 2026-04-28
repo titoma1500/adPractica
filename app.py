@@ -130,6 +130,7 @@ def listar_productos():
 def enviar_correo_alerta(asunto, mensaje, destino):
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_timeout = int(os.getenv("SMTP_TIMEOUT", "15"))
     smtp_username = os.getenv("EMAIL_USER") or os.getenv("SMTP_USERNAME")
     smtp_password = os.getenv("EMAIL_PASSWORD") or os.getenv("SMTP_PASSWORD")
     smtp_from = os.getenv("EMAIL_FROM") or os.getenv("SMTP_FROM") or smtp_username
@@ -151,17 +152,26 @@ def enviar_correo_alerta(asunto, mensaje, destino):
     email["To"] = destino
     email.set_content(mensaje)
 
-    if smtp_use_ssl:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+    try:
+        if smtp_use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=smtp_timeout) as server:
+                server.login(smtp_username, smtp_password)
+                server.send_message(email)
+            return
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
+            server.ehlo()
+            if smtp_starttls:
+                server.starttls()
+                server.ehlo()
             server.login(smtp_username, smtp_password)
             server.send_message(email)
-        return
-
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        if smtp_starttls:
-            server.starttls()
-        server.login(smtp_username, smtp_password)
-        server.send_message(email)
+    except smtplib.SMTPAuthenticationError as e:
+        raise RuntimeError(f"Error de autenticacion SMTP: {e.smtp_error!r}") from e
+    except smtplib.SMTPException as e:
+        raise RuntimeError(f"Error SMTP: {str(e)}") from e
+    except OSError as e:
+        raise RuntimeError(f"Error de conexion SMTP: {str(e)}") from e
 
 @app.route("/enviar-alerta", methods=["POST"]) 
 def enviar_alerta():
