@@ -1,4 +1,7 @@
 import os
+import smtplib
+from email.message import EmailMessage
+
 from flask import Flask, jsonify, request
 from mssql_python import connect
 
@@ -122,6 +125,43 @@ def listar_productos():
             cursor.close()
         if conn:
             conn.close()
+
+
+def enviar_correo_alerta(asunto, mensaje, destino):
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username = os.getenv("EMAIL_USER")
+    smtp_password = os.getenv("EMAIL_PASSWORD")
+    smtp_from = os.getenv("EMAIL_FROM", smtp_username)
+    smtp_use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+    smtp_starttls = os.getenv("SMTP_STARTTLS", "true").lower() == "true"
+
+    if not smtp_host:
+        raise ValueError("Falta SMTP_HOST")
+    if not smtp_username:
+        raise ValueError("Falta EMAIL_USER")
+    if not smtp_password:
+        raise ValueError("Falta EMAIL_PASSWORD")
+    if not smtp_from:
+        raise ValueError("Falta EMAIL_FROM")
+
+    email = EmailMessage()
+    email["Subject"] = asunto
+    email["From"] = smtp_from
+    email["To"] = destino
+    email.set_content(mensaje)
+
+    if smtp_use_ssl:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+            server.login(smtp_username, smtp_password)
+            server.send_message(email)
+        return
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        if smtp_starttls:
+            server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(email)
 
 @app.route("/enviar-alerta", methods=["POST"]) 
 def enviar_alerta():
