@@ -1,6 +1,10 @@
 import os
+import resend
+import threading
 import smtplib
 from email.message import EmailMessage
+import threading
+import resend
 
 from flask import Flask, jsonify, request
 from mssql_python import connect
@@ -136,6 +140,26 @@ def enviar_correo_alerta(asunto, mensaje, destino):
     smtp_from = os.getenv("EMAIL_FROM") or os.getenv("SMTP_FROM") or smtp_username
     smtp_use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
     smtp_starttls = os.getenv("SMTP_STARTTLS", "true").lower() == "true"
+    
+    # Prefer using Resend if API key is provided (easier and allowed from hosted platforms)
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    if resend_api_key:
+        try:
+            import resend
+
+            resend.api_key = resend_api_key
+            from_addr = smtp_from or os.getenv("EMAIL_FROM") or "onboarding@resend.dev"
+            # Resend accepts either a single address or a list
+            to_field = destino if isinstance(destino, (list, tuple)) else [destino]
+            resend.Emails.send({
+                "from": from_addr,
+                "to": to_field,
+                "subject": asunto,
+                "html": f"<p>{mensaje}</p>",
+            })
+            return
+        except Exception as e:
+            raise RuntimeError(f"Error Resend: {str(e)}") from e
 
     if not smtp_host:
         raise ValueError("Falta SMTP_HOST")
@@ -196,6 +220,52 @@ def enviar_alerta():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+
+#?============== RESEND
+# Configurar API Key
+try:
+    resend.api_key = os.environ["RESEND_API_KEY"]
+except KeyError:
+    resend.api_key = None
+
+FROM_EMAIL = os.environ.get("MAIL_RESEND", "onboarding@resend.dev")
+
+# Función de envío
+def enviar_correo_resend(destino, asunto, mensaje):
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": [destino],
+        "subject": asunto,
+        "html": f"<p>{mensaje}</p>"
+    })
+
+# Endpoint
+@app.route("/enviar-alerta-resend", methods=["POST"])
+def enviar_alerta_resend():
+    data = request.json
+
+    correo = data.get("email")
+    asunto = data.get("subject", "Notificación")
+    mensaje = data.get("message", "Mensaje desde Render")
+
+    if not correo:
+        return jsonify({"error": "Falta el email"}), 400
+
+    try:
+        # Evita WORKER TIMEOUT
+        threading.Thread(target=enviar_correo_resend, args=(correo, asunto, mensaje)).start()
+
+        return jsonify({
+            "status": "ok",
+            "msg": "Correo enviado (async)"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "msg": str(e)
         }), 500
 
 if __name__ == "__main__":
