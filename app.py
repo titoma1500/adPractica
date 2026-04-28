@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from mssql_python import connect
 
 app = Flask(__name__)
@@ -123,6 +123,30 @@ def listar_productos():
         if conn:
             conn.close()
 
+@app.route("/enviar-alerta", methods=["POST"]) 
+def enviar_alerta():
+    try:
+        data = request.get_json()
+        destino = data.get("to")
+        asunto = data.get("subject")
+        mensaje = data.get("message")
+
+        if not destino or not asunto or not mensaje:
+            return jsonify({
+                "success": False,
+                "message": "Faltan datos"
+            }), 400
+
+        enviar_correo_alerta(asunto, mensaje, destino)
+        return jsonify({
+            "success": True,
+            "message": "Correo enviado"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
