@@ -130,9 +130,9 @@ def listar_productos():
 def enviar_correo_alerta(asunto, mensaje, destino):
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_username = os.getenv("EMAIL_USER")
-    smtp_password = os.getenv("EMAIL_PASSWORD")
-    smtp_from = os.getenv("EMAIL_FROM", smtp_username)
+    smtp_username = os.getenv("EMAIL_USER") or os.getenv("SMTP_USERNAME")
+    smtp_password = os.getenv("EMAIL_PASSWORD") or os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("EMAIL_FROM") or os.getenv("SMTP_FROM") or smtp_username
     smtp_use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
     smtp_starttls = os.getenv("SMTP_STARTTLS", "true").lower() == "true"
 
