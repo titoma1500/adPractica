@@ -234,19 +234,24 @@ FROM_EMAIL = os.environ.get("MAIL_RESEND", "onboarding@resend.dev")
 
 # Función de envío
 def enviar_correo_resend(destino, asunto, mensaje):
-    resend.Emails.send({
-        "from": FROM_EMAIL,
-        "to": [destino],
-        "subject": asunto,
-        "html": f"<p>{mensaje}</p>"
-    })
+    try:
+        result = resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": [destino],
+            "subject": asunto,
+            "html": f"<p>{mensaje}</p>"
+        })
+        app.logger.info("Resend send result: %s", result)
+        return result
+    except Exception:
+        app.logger.exception("Resend send failed for %s", destino)
+        raise
 
 # Endpoint
 @app.route("/enviar-alerta-resend", methods=["POST"])
 def enviar_alerta_resend():
     data = request.json
-
-    correo = data.get("email")
+    correo = data.get("email") or data.get("to")
     asunto = data.get("subject", "Notificación")
     mensaje = data.get("message", "Mensaje desde Render")
 
@@ -254,8 +259,14 @@ def enviar_alerta_resend():
         return jsonify({"error": "Falta el email"}), 400
 
     try:
-        # Evita WORKER TIMEOUT
-        threading.Thread(target=enviar_correo_resend, args=(correo, asunto, mensaje)).start()
+        # Evita WORKER TIMEOUT: lanzar hilo que controle errores y loguee
+        def _send_and_log(dest, subj, msg):
+            try:
+                enviar_correo_resend(dest, subj, msg)
+            except Exception as e:
+                app.logger.error("Async resend failed: %s", str(e))
+
+        threading.Thread(target=_send_and_log, args=(correo, asunto, mensaje)).start()
 
         return jsonify({
             "status": "ok",
@@ -263,6 +274,7 @@ def enviar_alerta_resend():
         })
 
     except Exception as e:
+        app.logger.exception("Failed to start async resend thread")
         return jsonify({
             "status": "error",
             "msg": str(e)
