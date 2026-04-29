@@ -1,15 +1,16 @@
 import os
-import resend
-import threading
 import smtplib
-from email.message import EmailMessage
 import threading
+from email.message import EmailMessage
+
 import resend
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from mssql_python import connect
 
 app = Flask(__name__)
+CORS(app, resources={r"/enviar-alerta*": {"origins": "*"}})
 
 
 def get_connection():
